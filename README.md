@@ -1,6 +1,6 @@
-# TeenSpeak
+# Sirinono
 
-TeenSpeak is an English pronunciation and speaking app for Vietnamese students aged 11–15. It is a static website: HTML, CSS and plain JavaScript, with no build step and no server. All content and code were written for this project.
+Sirinono is an English pronunciation and speaking app for Vietnamese students aged 11–15. It is a static website: HTML, CSS and plain JavaScript, with no build step and no server. All content and code were written for this project.
 
 ## Features
 

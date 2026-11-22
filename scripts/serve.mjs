@@ -20,4 +20,4 @@ createServer(async (req, res) => {
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     res.end('Not found');
   }
-}).listen(port, () => console.log(`TeenSpeak → http://localhost:${port}`));
+}).listen(port, () => console.log(`Sirinono → http://localhost:${port}`));

@@ -1,5 +1,5 @@
 // Progress, XP, levels, streaks and badges. Pure logic with an injectable storage.
-export const STORAGE_KEY = "teenspeak.v1";
+export const STORAGE_KEY = "sirinono.v1";
 
 export const LEVELS = [
   { min: 0, name: "Rookie" },

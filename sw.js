@@ -1,4 +1,4 @@
-const CACHE = "teenspeak-v1";
+const CACHE = "sirinono-v1";
 const ASSETS = [
   "./", "./index.html", "./manifest.json", "./css/style.css",
   "./js/app.js", "./js/data.js", "./js/scoring.js", "./js/progress.js", "./js/speech.js",
