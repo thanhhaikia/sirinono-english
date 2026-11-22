@@ -247,7 +247,7 @@ function renderPractice() {
   if (typedGo) {
     const submit = () => { const val = $("#typed").value.trim(); if (val) applyResult([{ transcript: val, confidence: 1 }], null); };
     typedGo.onclick = submit;
-    $("#typed").onkeydown = (e) => e.key === "Enter" && submit();
+    $("#typed").onkeydown = (e) => { if (e.key === "Enter") submit(); };
   }
 }
 
@@ -476,7 +476,7 @@ function renderChat(id) {
   if (typedGo) {
     const submit = () => { const val = $("#typed").value.trim(); if (val) chatResult(rp, [{ transcript: val, confidence: 1 }]); };
     typedGo.onclick = submit;
-    $("#typed").onkeydown = (e) => e.key === "Enter" && submit();
+    $("#typed").onkeydown = (e) => { if (e.key === "Enter") submit(); };
   }
   const cont = $("#continue");
   if (cont) cont.onclick = () => advanceChat(rp, true);
