@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>TeenSpeak – Luyện nói tiếng Anh cho teen</title>
+  <meta name="description" content="Luyện phát âm và nói tiếng Anh cho học sinh 11–15 tuổi: chấm điểm từng từ, phòng luyện âm, hội thoại nhập vai, XP và huy hiệu.">
+  <meta name="theme-color" content="#4f46e5">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="#/home" class="brand" aria-label="TeenSpeak">
+      <span class="brand-mark">TS</span><span class="brand-name">TeenSpeak</span>
+    </a>
+    <div class="stats" id="topStats"></div>
+  </header>
+
+  <main id="view" tabindex="-1"></main>
+
+  <nav class="tabbar" aria-label="Điều hướng chính">
+    <a href="#/home" data-tab="home"><span>🏠</span>Trang chủ</a>
+    <a href="#/topics" data-tab="topics"><span>📚</span>Bài học</a>
+    <a href="#/sounds" data-tab="sounds"><span>👅</span>Phòng âm</a>
+    <a href="#/roleplay" data-tab="roleplay"><span>🎭</span>Hội thoại</a>
+    <a href="#/me" data-tab="me"><span>🏅</span>Của tôi</a>
+  </nav>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

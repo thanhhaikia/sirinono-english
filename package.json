@@ -1,0 +1,13 @@
+{
+  "name": "teenspeak-english",
+  "version": "0.1.0",
+  "description": "TeenSpeak — luyện phát âm và nói tiếng Anh cho học sinh 11–15 tuổi. Static site, runs in the browser.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.mjs 8080",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "engines": { "node": ">=18" },
+  "license": "MIT"
+}
