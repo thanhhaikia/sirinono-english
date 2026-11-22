@@ -91,12 +91,15 @@ function merge(base, saved) {
 
 export function createProgress(storage, now = () => new Date()) {
   let state;
-  try {
-    const raw = storage?.getItem(STORAGE_KEY);
-    state = raw ? merge(defaultState(), JSON.parse(raw)) : defaultState();
-  } catch {
-    state = defaultState();
-  }
+  const load = () => {
+    try {
+      const raw = storage?.getItem(STORAGE_KEY);
+      state = raw ? merge(defaultState(), JSON.parse(raw)) : defaultState();
+    } catch {
+      state = defaultState();
+    }
+  };
+  load();
 
   const save = () => {
     try { storage?.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* storage full or blocked */ }
@@ -136,6 +139,7 @@ export function createProgress(storage, now = () => new Date()) {
   return {
     get state() { return state; },
     save,
+    reload: load,
     today,
 
     recordAttempt(itemId, score) {

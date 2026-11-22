@@ -77,3 +77,14 @@ test("corrupt storage falls back to defaults", () => {
   const p = createProgress(storage);
   assert.equal(p.state.xp, 0);
 });
+
+test("reload picks up progress saved by another tab", () => {
+  const storage = memoryStorage();
+  const a = createProgress(storage);
+  const b = createProgress(storage);
+  a.recordAttempt("w1", 90);
+  b.reload();
+  b.recordAttempt("w2", 80);
+  const fresh = createProgress(storage);
+  assert.ok(fresh.state.items.w1 && fresh.state.items.w2);
+});

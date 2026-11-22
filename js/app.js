@@ -1,9 +1,14 @@
 import { TOPICS, SOUNDS, ROLEPLAYS, ALL_ITEMS } from "./data.js";
 import { bestScore, bestOfAnswers, stars, verdict, feedbackTips, normalize } from "./scoring.js";
-import { createProgress, levelInfo, masteredCount, BADGES, dailyChallenge, dayKey, previousDayKey } from "./progress.js";
+import { createProgress, levelInfo, masteredCount, BADGES, dailyChallenge, dayKey, previousDayKey, STORAGE_KEY } from "./progress.js";
 import { support, speak, stopSpeaking, listen, ERROR_TEXT } from "./speech.js";
 
 const progress = createProgress(window.localStorage);
+window.addEventListener("storage", (e) => {
+  if (e.key !== STORAGE_KEY) return;
+  progress.reload();
+  renderTopStats();
+});
 const view = document.getElementById("view");
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const $ = (sel) => view.querySelector(sel);
