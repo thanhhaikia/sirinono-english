@@ -240,7 +240,7 @@ function renderPractice() {
   $("#mic").onclick = () => (s.listening ? activeListen?.stop() : doListen());
   $("#next").onclick = nextItem;
   const retry = $("#retry");
-  if (retry) retry.onclick = () => { s.result = null; s.error = null; renderPractice(); };
+  if (retry) retry.onclick = () => { revokeAudio(s.result?.audioUrl); s.result = null; s.error = null; renderPractice(); };
   const replay = $("#replay");
   if (replay) replay.onclick = () => $("#mine").play();
   const typedGo = $("#typedGo");
@@ -257,18 +257,21 @@ async function doListen() {
   s.listening = true;
   s.error = null;
   renderPractice();
+  const index = s.index;
+  const pending = listen({ lang: settings().accent, record: settings().keepRecording });
+  activeListen = pending;
   try {
-    activeListen = listen({ lang: settings().accent, record: settings().keepRecording });
-    const { alternatives, audioUrl } = await activeListen;
+    const { alternatives, audioUrl } = await pending;
+    if (session !== s || s.index !== index) return revokeAudio(audioUrl);
     s.listening = false;
     applyResult(alternatives, audioUrl);
   } catch (err) {
     s.listening = false;
     s.error = ERROR_TEXT[err?.code] || "Có lỗi khi nghe. Hãy thử lại.";
     if (["not-allowed", "service-not-allowed", "audio-capture", "network"].includes(err?.code)) s.showTyped = true;
-    if (session === s && location.hash === "#/practice") renderPractice();
+    if (session === s && s.index === index && location.hash === "#/practice") renderPractice();
   } finally {
-    activeListen = null;
+    if (activeListen === pending) activeListen = null;
   }
 }
 
@@ -277,6 +280,7 @@ function applyResult(alternatives, audioUrl) {
   const item = s.items[s.index];
   const r = bestScore(item.text, alternatives);
   const outcome = progress.recordAttempt(item.id, r.score);
+  revokeAudio(s.result?.audioUrl);
   s.result = { ...r, audioUrl, xpGained: outcome.xpGained, tips: feedbackTips(r.words) };
   s.results[item.id] = Math.max(s.results[item.id] || 0, r.score);
   renderTopStats();
@@ -284,9 +288,16 @@ function applyResult(alternatives, audioUrl) {
   celebrate(outcome);
 }
 
+function revokeAudio(url) {
+  if (url) URL.revokeObjectURL(url);
+}
+
 function nextItem() {
   const s = session;
   stopSpeaking();
+  activeListen?.stop();
+  s.listening = false;
+  revokeAudio(s.result?.audioUrl);
   if (s.index + 1 < s.items.length) {
     s.index += 1;
     s.result = null;
@@ -491,18 +502,21 @@ async function chatListen(rp) {
   c.listening = true;
   c.error = null;
   renderChat(rp.id);
+  const turn = c.turn;
+  const pending = listen({ lang: settings().accent, record: false });
+  activeListen = pending;
   try {
-    activeListen = listen({ lang: settings().accent, record: false });
-    const { alternatives } = await activeListen;
+    const { alternatives } = await pending;
+    if (chat !== c || c.turn !== turn) return;
     c.listening = false;
     chatResult(rp, alternatives);
   } catch (err) {
     c.listening = false;
     c.error = ERROR_TEXT[err?.code] || "Có lỗi khi nghe. Hãy thử lại.";
     if (["not-allowed", "service-not-allowed", "audio-capture", "network"].includes(err?.code)) c.showTyped = true;
-    if (chat === c) renderChat(rp.id);
+    if (chat === c && c.turn === turn) renderChat(rp.id);
   } finally {
-    activeListen = null;
+    if (activeListen === pending) activeListen = null;
   }
 }
 
