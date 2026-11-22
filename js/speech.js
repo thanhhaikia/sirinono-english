@@ -85,8 +85,14 @@ export const ERROR_TEXT = {
 export function listen({ lang = "en-US", record = true, maxMs = 9000, onStart } = {}) {
   if (!Recognition) return Promise.reject({ code: "unsupported" });
   let active = null;
+  let stopped = false;
   const promise = new Promise(async (resolve, reject) => {
     const recorder = record ? await startRecorder() : null;
+    if (stopped) {
+      const audioUrl = recorder ? await recorder.stop() : null;
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+      return reject({ code: "aborted" });
+    }
     const r = new Recognition();
     r.lang = lang;
     r.interimResults = false;
@@ -116,6 +122,6 @@ export function listen({ lang = "en-US", record = true, maxMs = 9000, onStart } 
       reject({ code: "aborted" });
     }
   });
-  promise.stop = () => active?.stop();
+  promise.stop = () => { stopped = true; active?.stop(); };
   return promise;
 }
