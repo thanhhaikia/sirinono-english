@@ -12,11 +12,16 @@ const CONTRACTIONS = {
   "who's": "who is", "gonna": "going to", "wanna": "want to"
 };
 
-const NUMBERS = {
-  "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four", "5": "five",
-  "6": "six", "7": "seven", "8": "eight", "9": "nine", "10": "ten", "11": "eleven",
-  "12": "twelve", "15": "fifteen", "20": "twenty", "30": "thirty", "50": "fifty", "100": "hundred"
-};
+const ONES = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+  "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+const TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+
+export function numberToWords(n) {
+  if (n < 20) return ONES[n];
+  if (n < 100) return TENS[Math.floor(n / 10)] + (n % 10 ? " " + ONES[n % 10] : "");
+  if (n < 1000) return ONES[Math.floor(n / 100)] + " hundred" + (n % 100 ? " " + numberToWords(n % 100) : "");
+  return String(n);
+}
 
 const HOMOPHONES = [
   ["to", "too", "two"], ["there", "their"], ["right", "write"], ["know", "no"],
@@ -41,7 +46,7 @@ export function normalize(text) {
   for (const raw of cleaned.split(/\s+/)) {
     const w = raw.replace(/^'+|'+$/g, "");
     if (!w) continue;
-    const expanded = CONTRACTIONS[w] || NUMBERS[w] || w;
+    const expanded = CONTRACTIONS[w] || (/^\d{1,3}$/.test(w) ? numberToWords(Number(w)) : w);
     out.push(...expanded.split(" "));
   }
   return out;

@@ -6,6 +6,8 @@ test("normalize lowercases, strips punctuation and expands contractions/numbers"
   assert.deepEqual(normalize("I'm learning, OK?"), ["i", "am", "learning", "ok"]);
   assert.deepEqual(normalize("I have 3 cats."), ["i", "have", "three", "cats"]);
   assert.deepEqual(normalize("Don’t worry"), ["do", "not", "worry"]);
+  assert.deepEqual(normalize("Size 38"), ["size", "thirty", "eight"]);
+  assert.equal(scoreTranscript("Size thirty eight, please.", "size 38 please").score, 100);
 });
 
 test("exact match scores 100 and marks every word good", () => {
