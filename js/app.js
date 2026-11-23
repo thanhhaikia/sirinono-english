@@ -787,16 +787,16 @@ function renderMe() {
       <label class="field">Tốc độ đọc mẫu: <span id="rateVal">${s.settings.rate}</span><input id="rate" type="range" min="0.5" max="1.2" step="0.1" value="${s.settings.rate}"></label>
       <label class="field">Mục tiêu mỗi ngày (số lần nói)
         <select id="goal">${[5, 10, 20, 30].map((g) => `<option ${s.settings.dailyGoal === g ? "selected" : ""}>${g}</option>`).join("")}</select></label>
-      <label class="toggle"><input type="checkbox" id="rec" ${s.settings.keepRecording ? "checked" : ""}> Ghi âm để nghe lại giọng mình</label>
-      <p class="muted small">Nếu trên điện thoại micro không nhận giọng, hãy tắt tuỳ chọn ghi âm.</p>
+      ${support.recording ? `<label class="toggle"><input type="checkbox" id="rec" ${s.settings.keepRecording ? "checked" : ""}> Ghi âm để nghe lại giọng mình</label>
+      <p class="muted small">Nếu trên điện thoại micro không nhận giọng, hãy tắt tuỳ chọn ghi âm.</p>` : ""}
       <div class="row"><button class="btn" id="test">🔊 Thử giọng mẫu</button><button class="btn ghost" id="reset">Xoá toàn bộ tiến độ</button></div>
     </section>
-    <p class="muted small" style="text-align:center">Điểm dựa trên những gì trình duyệt nghe được, không phải chấm từng âm vị. Dữ liệu chỉ lưu trên máy này.</p>`;
+    <p class="muted small" style="text-align:center">Điểm dựa trên những gì ${support.native ? "máy" : "trình duyệt"} nghe được, không phải chấm từng âm vị. Dữ liệu chỉ lưu trên máy này.</p>`;
   $("#name").onchange = (e) => { progress.setName(e.target.value); toast("Đã lưu tên"); };
   $("#accent").onchange = (e) => progress.updateSettings({ accent: e.target.value });
   $("#rate").oninput = (e) => { $("#rateVal").textContent = e.target.value; progress.updateSettings({ rate: Number(e.target.value) }); };
   $("#goal").onchange = (e) => progress.updateSettings({ dailyGoal: Number(e.target.value) });
-  $("#rec").onchange = (e) => progress.updateSettings({ keepRecording: e.target.checked });
+  if ($("#rec")) $("#rec").onchange = (e) => progress.updateSettings({ keepRecording: e.target.checked });
   $("#test").onclick = () => say("Hi! Let's practise speaking English together.");
   $("#reset").onclick = () => {
     if (confirm("Xoá toàn bộ XP, huy hiệu và tiến độ?")) { progress.reset(); resume.clearAll(); session = chat = quiz = null; renderTopStats(); renderMe(); toast("Đã xoá tiến độ"); }
@@ -869,6 +869,7 @@ window.addEventListener("online", () => { toast("Đã có mạng trở lại.");
 window.addEventListener("hashchange", route);
 route();
 
-if ("serviceWorker" in navigator && location.protocol !== "file:") {
+// The Android app ships every file inside the APK, so it needs no offline cache.
+if ("serviceWorker" in navigator && location.protocol !== "file:" && !support.native) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
