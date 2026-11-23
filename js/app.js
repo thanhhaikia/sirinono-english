@@ -112,7 +112,7 @@ function renderHome() {
       </ol>
       <p class="muted small">Bắt đầu với Thử thách hôm nay ngay bên dưới nhé.</p>
     </section>` : ""}
-    ${micNotice()}
+    <div data-mic-notice>${micNotice()}</div>
     ${resumeCard()}
     <section class="card">
       <div class="row spread">
@@ -346,7 +346,7 @@ function renderPractice() {
         ${r ? `<button class="btn" id="retry">↺ Thử lại</button>` : ""}
         <button class="btn ${r ? "primary" : "ghost"}" id="next">${s.index + 1 >= s.items.length ? "Hoàn thành" : r ? "Tiếp →" : "Bỏ qua →"}</button>
       </div>
-      ${micNotice()}
+      <div data-mic-notice>${micNotice()}</div>
     </section>`;
 
   $("#play").onclick = () => say(item.text);
@@ -651,7 +651,7 @@ function renderChat(id) {
         ${r && r.result.score < 50 ? `<button class="btn" id="skip">Bỏ qua lượt này</button>` : ""}
       </div>
       ${chat.turn > 0 ? `<p><button class="btn ghost small" id="restart">↺ Diễn lại từ đầu</button></p>` : ""}
-      ${micNotice()}
+      <div data-mic-notice>${micNotice()}</div>
     </section>`}`;
   $$("[data-say]").forEach((b) => (b.onclick = () => say(b.dataset.say)));
   $("#vi").onchange = (e) => { chat.showVi = e.target.checked; renderChat(id); };
@@ -851,14 +851,20 @@ function refreshPassiveView() {
   window.scrollTo(0, y);
 }
 
+// Updates the connection notice in place so an exercise in progress keeps its typed text.
+function syncMicNotice() {
+  $$("[data-mic-notice]").forEach((el) => (el.innerHTML = micNotice()));
+}
+
 window.addEventListener("offline", () => {
   toast("📴 Mất mạng. Bạn vẫn có thể luyện bằng cách gõ.");
   const [name, id] = currentRoute();
   if (name === "practice" && session && !session.showTyped && !session.listening) { session.showTyped = true; renderPractice(); }
   else if (name === "roleplay" && id && chat && !chat.showTyped && !chat.listening) { chat.showTyped = true; renderChat(id); }
   else refreshPassiveView();
+  syncMicNotice();
 });
-window.addEventListener("online", () => { toast("Đã có mạng trở lại."); refreshPassiveView(); });
+window.addEventListener("online", () => { toast("Đã có mạng trở lại."); refreshPassiveView(); syncMicNotice(); });
 
 window.addEventListener("hashchange", route);
 route();
