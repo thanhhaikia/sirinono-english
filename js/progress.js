@@ -142,11 +142,14 @@ export function createProgress(storage, now = () => new Date()) {
     reload: load,
     today,
 
-    recordAttempt(itemId, score) {
+    recordAttempt(itemId, score, heard = "") {
       const levelBefore = levelInfo(state.xp).index;
       const prev = state.items[itemId];
       const xp = xpForAttempt(score, prev?.best);
-      state.items[itemId] = { best: Math.max(prev?.best || 0, score), tries: (prev?.tries || 0) + 1, last: score };
+      state.items[itemId] = {
+        best: Math.max(prev?.best || 0, score), tries: (prev?.tries || 0) + 1,
+        last: score, at: now().getTime(), heard: String(heard || "").slice(0, 80)
+      };
       state.attempts += 1;
       if (score === 100) state.perfects += 1;
       touchDay();
@@ -187,6 +190,15 @@ export function createProgress(storage, now = () => new Date()) {
     },
 
     itemBest(id) { return state.items[id]?.best; },
+
+    // Items whose latest attempt was below 80, most recent first.
+    reviewItems(limit = Infinity) {
+      return Object.entries(state.items)
+        .filter(([, v]) => (v.last ?? v.best ?? 0) < 80)
+        .sort((a, b) => (b[1].at || 0) - (a[1].at || 0))
+        .slice(0, limit)
+        .map(([id, v]) => ({ id, last: v.last ?? v.best ?? 0, heard: v.heard || "" }));
+    },
     updateSettings(patch) { state.settings = { ...state.settings, ...patch }; save(); },
     setName(name) { state.name = String(name || "").trim().slice(0, 30); save(); },
     reset() { state = defaultState(); save(); }

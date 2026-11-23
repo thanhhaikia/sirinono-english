@@ -1,7 +1,7 @@
-const CACHE = "sirinono-v1";
+const CACHE = "sirinono-v2";
 const ASSETS = [
   "./", "./index.html", "./manifest.json", "./css/style.css",
-  "./js/app.js", "./js/data.js", "./js/scoring.js", "./js/progress.js", "./js/speech.js",
+  "./js/app.js", "./js/data.js", "./js/scoring.js", "./js/progress.js", "./js/speech.js", "./js/resume.js",
   "./icons/icon.svg", "./icons/icon-192.png", "./icons/icon-512.png"
 ];
 

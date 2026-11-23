@@ -132,3 +132,12 @@ label.field input, label.field select { display: block; width: 100%; margin-top:
 .week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center; font-size: 12px; }
 .week .d { padding: 8px 0; border-radius: 10px; background: #eef0ff; }
 .week .d.on { background: linear-gradient(135deg, #f97316, #ef4444); color: #fff; font-weight: 700; }
+
+/* long unbroken names or answers must not widen the page */
+main { overflow-wrap: break-word; }
+.heard, .hero h1, .hero p { overflow-wrap: anywhere; }
+.grow { flex: 1; min-width: 0; text-align: left; }
+.steps { margin: 8px 0; padding-left: 22px; }
+.steps li { margin: 6px 0; }
+.resume { border: 2px solid var(--primary); }
+.btn.small { padding: 6px 10px; }

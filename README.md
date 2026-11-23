@@ -18,7 +18,9 @@ Sirinono is an English pronunciation and speaking app for Vietnamese students ag
   - a "Listen and choose" game.
 - **Role-play (6 scenes):** meeting a new classmate, ordering a drink, asking for directions, gaming with a friend, talking about the weekend, buying sneakers. The character speaks, then the student picks a suggested reply and says it.
 - **Motivation:** XP, 10 levels, day streaks, a daily goal, a daily challenge (6 items, +25 XP) and 13 badges.
-- **PWA:** can be installed on a phone's home screen. After the first visit, the interface works offline.
+- **Review mistakes:** a list of the words and sentences whose latest attempt scored under 80, with what was heard and a tip.
+- **Resume:** an unfinished lesson, quiz or role-play survives a reload or Back; lessons can be continued from Home.
+- **PWA:** can be installed on a phone's home screen. After the first visit, the interface works offline; without Internet the student types answers instead of using the microphone.
 
 ## Limitations
 
@@ -49,6 +51,7 @@ js/app.js           router and screens (home, lessons, practice, Sound Lab, role
 js/speech.js        text-to-speech, speech recognition, recording
 js/scoring.js       word alignment, scoring, Vietnamese pronunciation tips
 js/progress.js      XP, levels, streaks, badges, daily challenge
+js/resume.js        remembers an unfinished lesson, quiz or role-play
 js/data.js          lesson content
 manifest.json, sw.js, icons/   PWA
 tests/              unit tests

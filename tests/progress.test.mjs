@@ -88,3 +88,19 @@ test("reload picks up progress saved by another tab", () => {
   const fresh = createProgress(storage);
   assert.ok(fresh.state.items.w1 && fresh.state.items.w2);
 });
+
+test("reviewItems lists items whose latest attempt was weak, newest first", () => {
+  let t = new Date("2026-11-22T10:00:00").getTime();
+  const p = createProgress(memoryStorage(), () => new Date((t += 1000)));
+  p.recordAttempt("a", 40, "hat");
+  p.recordAttempt("b", 95, "ship");
+  p.recordAttempt("c", 100, "sheep");
+  p.recordAttempt("c", 30, "x".repeat(200));
+  assert.deepEqual(p.reviewItems().map((r) => r.id), ["c", "a"]);
+  assert.equal(p.reviewItems()[0].heard.length, 80);
+  p.recordAttempt("a", 90, "hat");
+  assert.deepEqual(p.reviewItems().map((r) => r.id), ["c"]);
+  for (let i = 0; i < 25; i++) p.recordAttempt(`w${i}`, 10);
+  assert.equal(p.reviewItems().length, 26);
+  assert.equal(p.reviewItems(5).length, 5);
+});
