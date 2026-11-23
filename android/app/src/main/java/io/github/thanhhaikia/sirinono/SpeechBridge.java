@@ -88,7 +88,9 @@ final class SpeechBridge {
             return;
         }
         speakWhenReady = start;
-        if (tts == null) tts = new TextToSpeech(activity, this::onTtsInit);
+        // With no speech engine installed Android reports the failure from inside the constructor,
+        // so the answer is posted to run once `tts` is assigned.
+        if (tts == null) tts = new TextToSpeech(activity, status -> web.post(() -> onTtsInit(status)));
     }
 
     private void onTtsInit(int status) {
