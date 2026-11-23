@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.os.Bundle;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -38,6 +39,8 @@ public class MainActivity extends Activity {
         speech = new SpeechBridge(this, web);
         web.addJavascriptInterface(speech, "SirinonoNative");
         web.setWebViewClient(new AppClient());
+        // Without a WebChromeClient the WebView answers confirm() with "cancel" and never shows it.
+        web.setWebChromeClient(new WebChromeClient());
 
         if (savedInstanceState == null || web.restoreState(savedInstanceState) == null) web.loadUrl(START_URL);
     }
