@@ -1,13 +1,16 @@
-import { TOPICS, SOUNDS, ROLEPLAYS, ALL_ITEMS } from "./data.js";
-import { bestScore, bestOfAnswers, stars, verdict, feedbackTips, normalize } from "./scoring.js";
+import { TOPICS, SOUNDS, ROLEPLAYS, ALL_ITEMS, findItem } from "./data.js";
+import { bestScore, bestOfAnswers, scoreTranscript, stars, verdict, feedbackTips, normalize } from "./scoring.js";
 import { createProgress, levelInfo, masteredCount, BADGES, dailyChallenge, dayKey, previousDayKey, STORAGE_KEY } from "./progress.js";
 import { support, speak, stopSpeaking, listen, ERROR_TEXT } from "./speech.js";
+import { createResume, SHORT_LIVED_MS } from "./resume.js";
 
 const progress = createProgress(window.localStorage);
+const resume = createResume(window.localStorage);
 window.addEventListener("storage", (e) => {
-  if (e.key !== STORAGE_KEY) return;
+  if (e.key !== null && e.key !== STORAGE_KEY) return;
   progress.reload();
   renderTopStats();
+  refreshPassiveView();
 });
 const view = document.getElementById("view");
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -15,6 +18,11 @@ const $ = (sel) => view.querySelector(sel);
 const $$ = (sel) => Array.from(view.querySelectorAll(sel));
 const settings = () => progress.state.settings;
 const say = (text, slow = false) => speak(text, { lang: settings().accent, rate: slow ? 0.6 : settings().rate });
+const offline = () => navigator.onLine === false;
+const typedByDefault = () => !support.recognition || offline();
+const finePointer = window.matchMedia?.("(pointer: fine)").matches;
+const typedHasFocus = () => document.activeElement?.id === "typed";
+const EMPTY_ANSWER = "Hãy gõ câu trả lời trước nhé.";
 
 let session = null;   // practice session
 let chat = null;      // role-play state
@@ -63,6 +71,7 @@ function mastery(items) {
 }
 
 function micNotice() {
+  if (support.recognition && offline()) return `<div class="notice">📴 Đang ngoại tuyến. Chấm điểm bằng micro cần Internet, nhưng bạn vẫn có thể nghe mẫu và gõ câu trả lời để luyện.</div>`;
   if (support.recognition) return "";
   return `<div class="notice">${ERROR_TEXT.unsupported} Bạn vẫn có thể nghe mẫu và gõ câu để thử chấm điểm.</div>`;
 }
@@ -76,6 +85,7 @@ function renderHome() {
   const today = progress.todayCount();
   const dailyDone = progress.dailyDoneToday();
   const suggestion = TOPICS.find((t) => mastery(t.items).pct < 100) || TOPICS[0];
+  const reviewCount = progress.reviewItems(99).length;
   view.innerHTML = `
     <section class="card hero">
       <p class="muted">${s.name ? `Chào ${esc(s.name)}!` : "Chào bạn!"} Hôm nay luyện nói một chút nhé.</p>
@@ -92,7 +102,18 @@ function renderHome() {
       <h3>Bạn tên là gì?</h3>
       <div class="typed"><input id="nameInput" maxlength="30" placeholder="Ví dụ: Minh"><button class="btn primary" id="saveName">Lưu</button></div>
     </section>`}
+    ${s.attempts === 0 ? `
+    <section class="card">
+      <h3>👋 Cách học trong 3 bước</h3>
+      <ol class="steps">
+        <li><b>🔊 Nghe mẫu</b> – bấm loa để nghe cách đọc.</li>
+        <li><b>🎤 Nói theo</b> – bấm micro rồi đọc to (chưa có micro thì gõ câu trả lời).</li>
+        <li><b>✅ Xem góp ý</b> – từ xanh là rõ, vàng là gần đúng, đỏ là cần luyện lại.</li>
+      </ol>
+      <p class="muted small">Bắt đầu với Thử thách hôm nay ngay bên dưới nhé.</p>
+    </section>` : ""}
     ${micNotice()}
+    ${resumeCard()}
     <section class="card">
       <div class="row spread">
         <div><h3>🎯 Thử thách hôm nay</h3><p class="muted small">6 từ và câu chọn ngẫu nhiên. Hoàn thành để nhận +25 XP.</p></div>
@@ -100,6 +121,11 @@ function renderHome() {
       </div>
       <button class="btn primary block" id="startDaily">${dailyDone ? "Luyện lại thử thách" : "Bắt đầu thử thách"}</button>
     </section>
+    ${reviewCount ? `
+    <a class="tile" href="#/review" style="--accent:#ef4444;margin-top:12px">
+      <div class="row spread"><h3>🔁 Ôn lỗi</h3><span class="pill missed">${reviewCount} mục</span></div>
+      <p class="muted small">Luyện lại những từ và câu bạn nói chưa rõ.</p>
+    </a>` : ""}
     <h2 class="section-title">Học tiếp</h2>
     <a class="tile" href="#/topic/${suggestion.id}" style="--accent:${suggestion.color}">
       <div class="row spread"><span class="icon">${suggestion.icon}</span><span class="pill">${mastery(suggestion.items).done}/${suggestion.items.length}</span></div>
@@ -116,6 +142,35 @@ function renderHome() {
   };
   const save = $("#saveName");
   if (save) save.onclick = () => { progress.setName($("#nameInput").value); renderHome(); };
+  bindResumeCard(renderHome);
+}
+
+// ---------- review mistakes ----------
+function renderReview() {
+  setTab("home");
+  const list = progress.reviewItems().map((r) => ({ ...r, item: findItem(r.id) })).filter((r) => r.item);
+  const items = list.map((r) => r.item);
+  view.innerHTML = `
+    <a href="#/home" class="btn ghost">← Trang chủ</a>
+    <h1>🔁 Ôn lỗi</h1>
+    <p class="muted">Những từ và câu lần gần nhất bạn nói chưa đạt 80 điểm. Luyện lại đạt 80 là mục đó rời khỏi danh sách.</p>
+    ${list.length ? `
+    <button class="btn primary block" id="reviewAll" style="margin-top:12px">Luyện lại ${list.length} mục</button>
+    <section class="card"><ul class="item-list">${list.map((r, idx) => {
+      const tip = r.heard ? feedbackTips(scoreTranscript(r.item.text, r.heard).words, 1)[0] : null;
+      return `<li>
+        <button class="btn ghost" data-say="${esc(r.item.text)}" aria-label="Nghe">🔊</button>
+        <div class="grow"><b>${esc(r.item.text)}</b><div class="muted small">${esc(r.item.vi)}</div>
+          ${r.heard ? `<div class="heard">Máy nghe được: “${esc(r.heard)}”</div>` : ""}
+          ${tip ? `<div class="small">💡 <b>${esc(tip.word)}</b>: ${esc(tip.tip)}</div>` : ""}</div>
+        <span class="pill ${r.last >= 50 ? "close" : "missed"}">${r.last}</span>
+        <button class="btn" data-start="${idx}">Luyện</button>
+      </li>`;
+    }).join("")}</ul></section>` : `<section class="card"><p>🎉 Không có lỗi nào cần ôn. Giỏi lắm!</p></section>`}`;
+  $$("[data-say]").forEach((b) => (b.onclick = () => say(b.dataset.say)));
+  $$("[data-start]").forEach((b) => (b.onclick = () => startSession({ title: "Ôn lỗi", items, back: "#/review", start: Number(b.dataset.start) })));
+  const all = $("#reviewAll");
+  if (all) all.onclick = () => startSession({ title: "Ôn lỗi", items, back: "#/review" });
 }
 
 // ---------- topics ----------
@@ -159,10 +214,11 @@ function renderTopic(id) {
       <h1>${t.icon} ${t.title}</h1><p class="muted">${t.vi}</p>
       <div class="row"><button class="btn primary" id="all">Luyện cả bài</button><button class="btn" id="weak">Luyện mục chưa tốt</button></div>
     </section>
-    <h2 class="section-title">Từ vựng</h2><section class="card">${renderItemList(words)}</section>
+    ${resumeCard(back)}
+    <h2 class="section-title">Từ vựng</h2><section class="card" id="words">${renderItemList(words)}</section>
     <h2 class="section-title">Câu</h2><section class="card" id="sentences">${renderItemList(sentences)}</section>`;
   $$("[data-say]").forEach((b) => (b.onclick = () => say(b.dataset.say)));
-  $$(".card:not(#sentences) [data-start]").forEach((b) => (b.onclick = () => startSession({ title: t.title, items: words, back, start: Number(b.dataset.start) })));
+  $$("#words [data-start]").forEach((b) => (b.onclick = () => startSession({ title: t.title, items: words, back, start: Number(b.dataset.start) })));
   $$("#sentences [data-start]").forEach((b) => (b.onclick = () => startSession({ title: t.title, items: sentences, back, start: Number(b.dataset.start) })));
   $("#all").onclick = () => startSession({ title: t.title, items: t.items, back });
   $("#weak").onclick = () => {
@@ -170,12 +226,62 @@ function renderTopic(id) {
     if (!weak.length) return toast("Bạn đã thành thạo cả bài rồi! 🎉");
     startSession({ title: t.title, items: weak, back });
   };
+  bindResumeCard(() => renderTopic(id));
 }
 
 // ---------- practice session ----------
 function startSession({ title, items, back, start = 0, daily = false, sound = null }) {
-  session = { title, items, back, index: start, daily, sound, result: null, results: {}, listening: false, error: null, showTyped: !support.recognition };
+  session = { title, items, back, index: start, daily, sound, result: null, results: {}, listening: false, error: null, showTyped: typedByDefault() };
+  saveSession();
   if (location.hash === "#/practice") renderPractice(); else go("#/practice");
+}
+
+function saveSession() {
+  const s = session;
+  resume.set("practice", {
+    title: s.title, ids: s.items.map((i) => i.id), back: s.back, index: s.index,
+    day: s.daily ? progress.today() : null, sound: s.sound?.id || null, results: s.results
+  });
+}
+
+// Rebuilds the saved practice session, or null when there is none or it no longer applies.
+function loadSession() {
+  const d = resume.get("practice");
+  if (!d) return null;
+  const items = Array.isArray(d.ids) ? d.ids.map(findItem).filter(Boolean) : [];
+  if (!items.length || items.length !== d.ids.length || (d.day && d.day !== progress.today())) {
+    resume.clear("practice");
+    return null;
+  }
+  const results = {};
+  for (const i of items) if (Number.isFinite(d.results?.[i.id])) results[i.id] = d.results[i.id];
+  return {
+    title: String(d.title || ""), items, results,
+    back: /^#\/[\w/-]*$/.test(d.back) ? d.back : "#/home",
+    index: Math.min(Math.max(0, d.index | 0), items.length - 1),
+    daily: Boolean(d.day), sound: SOUNDS.find((x) => x.id === d.sound) || null,
+    result: null, listening: false, error: null, showTyped: typedByDefault()
+  };
+}
+
+const sessionStarted = (s) => s.index > 0 || Object.keys(s.results).length > 0;
+
+function resumeCard(back) {
+  const saved = loadSession();
+  if (!saved || !sessionStarted(saved) || (back && saved.back !== back)) return "";
+  return `
+    <section class="card resume">
+      <h3>⏸️ Bạn đang học dở</h3>
+      <p class="muted small">${esc(saved.title)} · câu ${saved.index + 1}/${saved.items.length}</p>
+      <div class="row"><button class="btn primary" id="resumeGo">Học tiếp</button><button class="btn ghost" id="resumeDrop">Bỏ</button></div>
+    </section>`;
+}
+
+function bindResumeCard(rerender) {
+  const goOn = $("#resumeGo");
+  if (!goOn) return;
+  goOn.onclick = () => { session = loadSession(); go("#/practice"); };
+  $("#resumeDrop").onclick = () => { resume.clear("practice"); rerender(); };
 }
 
 function wordsHtml(item, result) {
@@ -198,8 +304,10 @@ function wordsHtml(item, result) {
 }
 
 function renderPractice() {
+  if (!session) session = loadSession();
   if (!session) return go("#/home");
   const s = session;
+  const hadFocus = typedHasFocus();
   const item = s.items[s.index];
   const r = s.result;
   const v = r ? verdict(r.score) : null;
@@ -218,9 +326,10 @@ function renderPractice() {
         <button class="round" id="slow" title="Nghe chậm">🐢</button>
       </div>
       <p class="muted small">${s.listening ? "Đang nghe… hãy đọc to và rõ." : "Bấm 🔊 để nghe mẫu, rồi bấm 🎤 và đọc theo. Chạm vào từng từ để nghe riêng từ đó."}</p>
+      ${s.showTyped ? "" : `<button class="btn ghost small" id="useTyped">⌨️ Gõ thay vì nói</button>`}
       ${s.error ? `<div class="notice">${esc(s.error)}</div>` : ""}
       ${r ? `
-        <div class="result">
+        <div class="result" role="status">
           <div class="score ${v.tone}">${r.score}</div>
           <div class="stars">${"★".repeat(stars(r.score))}${"☆".repeat(3 - stars(r.score))}</div>
           <h3>${v.label} <span class="pill">+${r.xpGained} XP</span></h3>
@@ -231,7 +340,7 @@ function renderPractice() {
           ${r.tips.length ? `<ul class="tips">${r.tips.map((t) => `<li><b>${esc(t.word)}</b>: ${esc(t.tip)}</li>`).join("")}</ul>` : ""}
         </div>` : ""}
       ${s.showTyped ? `
-        <div class="typed"><input id="typed" placeholder="Không có micro? Gõ câu bạn đọc để thử"><button class="btn" id="typedGo">Chấm</button></div>` : ""}
+        <div class="typed"><input id="typed" maxlength="200" autocomplete="off" autocapitalize="off" placeholder="Không có micro? Gõ câu bạn đọc để thử"><button class="btn" id="typedGo">Chấm</button></div>` : ""}
       <div class="row" style="justify-content:center;margin-top:16px">
         ${r ? `<button class="btn" id="retry">↺ Thử lại</button>` : ""}
         <button class="btn ${r ? "primary" : "ghost"}" id="next">${s.index + 1 >= s.items.length ? "Hoàn thành" : r ? "Tiếp →" : "Bỏ qua →"}</button>
@@ -250,10 +359,23 @@ function renderPractice() {
   if (replay) replay.onclick = () => $("#mine").play();
   const typedGo = $("#typedGo");
   if (typedGo) {
-    const submit = () => { const val = $("#typed").value.trim(); if (val) applyResult([{ transcript: val, confidence: 1 }], null); };
+    const submit = () => {
+      const val = $("#typed").value.trim();
+      if (val) return applyResult([{ transcript: val, confidence: 1 }], null);
+      s.error = EMPTY_ANSWER;
+      renderPractice();
+      $("#typed").focus();
+    };
     typedGo.onclick = submit;
-    $("#typed").onkeydown = (e) => { if (e.key === "Enter") submit(); };
+    // Enter scores the answer; Enter again on the empty box moves on.
+    $("#typed").onkeydown = (e) => {
+      if (e.key !== "Enter") return;
+      if (s.result && !e.target.value.trim()) nextItem(); else submit();
+    };
+    if (hadFocus || (finePointer && !r)) $("#typed").focus({ preventScroll: true });
   }
+  const useTyped = $("#useTyped");
+  if (useTyped) useTyped.onclick = () => { s.showTyped = true; renderPractice(); $("#typed").focus(); };
 }
 
 async function doListen() {
@@ -284,10 +406,12 @@ function applyResult(alternatives, audioUrl) {
   const s = session;
   const item = s.items[s.index];
   const r = bestScore(item.text, alternatives);
-  const outcome = progress.recordAttempt(item.id, r.score);
+  const outcome = progress.recordAttempt(item.id, r.score, r.transcript);
   revokeAudio(s.result?.audioUrl);
+  s.error = null;
   s.result = { ...r, audioUrl, xpGained: outcome.xpGained, tips: feedbackTips(r.words) };
   s.results[item.id] = Math.max(s.results[item.id] || 0, r.score);
+  saveSession();
   renderTopStats();
   renderPractice();
   celebrate(outcome);
@@ -307,6 +431,7 @@ function nextItem() {
     s.index += 1;
     s.result = null;
     s.error = null;
+    saveSession();
     renderPractice();
   } else {
     renderSummary();
@@ -315,6 +440,8 @@ function nextItem() {
 
 function renderSummary() {
   const s = session;
+  s.done = true;
+  resume.clear("practice");
   const scores = Object.values(s.results);
   const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
   let bonus = null;
@@ -367,12 +494,14 @@ function renderSound(id) {
       <p>${esc(snd.how)}</p>
       <div class="row"><button class="btn primary" id="speakAll">🎤 Luyện nói</button><a class="btn" href="#/listen/${snd.id}">👂 Nghe và chọn</a></div>
     </section>
+    ${resumeCard(`#/sound/${snd.id}`)}
     <h2 class="section-title">Cặp từ dễ nhầm</h2>
     <section class="card"><ul class="item-list">${snd.pairs.map(([a, b]) => `
       <li><button class="btn" data-say="${esc(a)}">🔊 ${esc(a)}</button><span class="muted">vs</span><button class="btn" data-say="${esc(b)}">🔊 ${esc(b)}</button></li>`).join("")}
     </ul></section>`;
   $$("[data-say]").forEach((b) => (b.onclick = () => say(b.dataset.say, true)));
   $("#speakAll").onclick = () => startSession({ title: snd.title, items: snd.items, back: `#/sound/${snd.id}`, sound: snd });
+  bindResumeCard(() => renderSound(id));
 }
 
 function newQuizRound() {
@@ -383,12 +512,24 @@ function newQuizRound() {
   quiz.picked = null;
 }
 
+// A quiz left less than 30 minutes ago, if it still matches this sound.
+function savedQuiz(snd) {
+  const q = resume.get("quiz", SHORT_LIVED_MS);
+  const words = snd.pairs.flat();
+  const ok = q && q.soundId === snd.id && q.total === 8 && q.round >= 0 && q.round < q.total && q.correct >= 0 && q.correct <= q.round + 1
+    && Array.isArray(q.current?.options) && q.current.options.length === 2 && q.current.options.every((o) => words.includes(o))
+    && q.current.options.includes(q.current.answer) && (q.picked == null || q.current.options.includes(q.picked));
+  return ok ? { ...q, autoplayed: true } : null;
+}
+
 function renderListen(id) {
   setTab("sounds");
   const snd = SOUNDS.find((x) => x.id === id);
   if (!snd) return go("#/sounds");
-  if (!quiz || quiz.soundId !== id) { quiz = { soundId: id, round: 0, total: 8, correct: 0 }; newQuizRound(); }
+  if (!quiz || quiz.soundId !== id) quiz = savedQuiz(snd);
+  if (!quiz) { quiz = { soundId: id, round: 0, total: 8, correct: 0 }; newQuizRound(); }
   if (quiz.round >= quiz.total) {
+    resume.clear("quiz");
     view.innerHTML = `
       <section class="card practice">
         <h1>👂 Kết quả</h1>
@@ -398,6 +539,7 @@ function renderListen(id) {
     $("#again").onclick = () => { quiz = null; renderListen(id); };
     return;
   }
+  resume.set("quiz", quiz);
   const c = quiz.current;
   view.innerHTML = `
     <div class="row spread"><a href="#/sound/${id}" class="btn ghost">← ${esc(snd.title)}</a><span class="muted small">Câu ${quiz.round + 1}/${quiz.total} · Đúng ${quiz.correct}</span></div>
@@ -410,10 +552,16 @@ function renderListen(id) {
         const cls = quiz.picked ? (o === c.answer ? "right" : o === quiz.picked ? "wrong" : "") : "";
         return `<button class="choice ${cls}" data-pick="${esc(o)}" ${quiz.picked ? "disabled" : ""}>${esc(o)}</button>`;
       }).join("")}</div>
-      ${quiz.picked ? `<p style="margin-top:12px"><b>${quiz.picked === c.answer ? "Chính xác! 🎉" : `Chưa đúng, đó là “${esc(c.answer)}”.`}</b></p>
+      ${quiz.picked ? `<p style="margin-top:12px" role="status"><b>${quiz.picked === c.answer ? "Chính xác! 🎉" : `Chưa đúng, đó là “${esc(c.answer)}”.`}</b></p>
+        ${quiz.picked === c.answer ? "" : `<p class="muted small">💡 ${esc(snd.how)}</p>`}
+        <div class="row" style="justify-content:center;margin-bottom:12px">${c.options.map((o) => `<button class="btn" data-say="${esc(o)}">🔊 ${esc(o)}</button>`).join("")}</div>
         <button class="btn primary" id="nextQ">Tiếp →</button>` : ""}
+      ${quiz.round > 0 ? `<p><button class="btn ghost small" id="restart">↺ Chơi lại từ đầu</button></p>` : ""}
     </section>`;
   $("#hear").onclick = () => say(c.answer, true);
+  $$("[data-say]").forEach((b) => (b.onclick = () => say(b.dataset.say, true)));
+  const restart = $("#restart");
+  if (restart) restart.onclick = () => { quiz = null; resume.clear("quiz"); renderListen(id); };
   $$("[data-pick]").forEach((b) => (b.onclick = () => {
     quiz.picked = b.dataset.pick;
     const ok = quiz.picked === c.answer;
@@ -445,17 +593,38 @@ function renderRoleplays() {
 }
 
 function startChat(rp) {
-  chat = { id: rp.id, turn: 0, log: [], scores: [], result: null, listening: false, error: null, showTyped: !support.recognition, showVi: true };
+  chat = { id: rp.id, turn: 0, picks: [], log: [], scores: [], result: null, listening: false, error: null, showTyped: typedByDefault(), showVi: true };
   chat.log.push({ who: "bot", en: rp.turns[0].bot[0], vi: rp.turns[0].bot[1] });
   say(rp.turns[0].bot[0]);
+}
+
+// A role-play left less than 30 minutes ago, rebuilt from the scene so stored text is never trusted.
+function savedChat(rp) {
+  const c = resume.get("chat", SHORT_LIVED_MS);
+  if (!c || c.id !== rp.id || !Array.isArray(c.picks) || !c.picks.length || c.picks.length >= rp.turns.length) return null;
+  const log = [];
+  const scores = [];
+  for (let t = 0; t < c.picks.length; t++) {
+    const { reply, score, counted } = c.picks[t] || {};
+    const pair = rp.turns[t].replies[reply];
+    if (!pair || !(score >= 0 && score <= 100)) return null;
+    log.push({ who: "bot", en: rp.turns[t].bot[0], vi: rp.turns[t].bot[1] }, { who: "me", en: pair[0], vi: pair[1], score });
+    scores.push(counted ? score : 0);
+  }
+  const next = rp.turns[c.picks.length];
+  log.push({ who: "bot", en: next.bot[0], vi: next.bot[1] });
+  return { id: rp.id, turn: c.picks.length, picks: c.picks, log, scores, result: null, listening: false, error: null, showTyped: typedByDefault(), showVi: c.showVi !== false };
 }
 
 function renderChat(id) {
   setTab("roleplay");
   const rp = ROLEPLAYS.find((x) => x.id === id);
   if (!rp) return go("#/roleplay");
-  if (!chat || chat.id !== id) startChat(rp);
+  if (!chat || chat.id !== id) chat = savedChat(rp);
+  if (!chat) startChat(rp);
   const done = chat.turn >= rp.turns.length;
+  if (done || !chat.turn) resume.clear("chat"); else resume.set("chat", { id, picks: chat.picks, showVi: chat.showVi });
+  const hadFocus = typedHasFocus();
   const turn = rp.turns[chat.turn];
   const r = chat.result;
   view.innerHTML = `
@@ -470,15 +639,18 @@ function renderChat(id) {
       ${turn.replies.map(([en, vi], i) => `<button class="reply-option ${r && r.index === i ? "selected" : ""}" data-say="${esc(en)}"><b>${esc(en)}</b>${chat.showVi ? `<div class="muted small">${esc(vi)}</div>` : ""}</button>`).join("")}
       <div class="controls"><button class="mic ${chat.listening ? "listening" : ""}" id="mic" ${support.recognition ? "" : "disabled"}>${chat.listening ? "⏹" : "🎤"}</button></div>
       <p class="muted small">Chạm vào câu gợi ý để nghe mẫu. Bấm 🎤 rồi nói.</p>
+      ${chat.showTyped ? "" : `<button class="btn ghost small" id="useTyped">⌨️ Gõ thay vì nói</button>`}
       ${chat.error ? `<div class="notice">${esc(chat.error)}</div>` : ""}
-      ${r ? `<div class="result"><div class="score ${verdict(r.result.score).tone}">${r.result.score}</div>
+      ${r ? `<div class="result" role="status"><div class="score ${verdict(r.result.score).tone}">${r.result.score}</div>
         <p class="heard">Máy nghe được: “${esc(r.result.transcript)}”</p>
         <div class="target" style="font-size:22px">${wordsHtml({ text: r.answer }, r.result)}</div></div>` : ""}
-      ${chat.showTyped ? `<div class="typed"><input id="typed" placeholder="Không có micro? Gõ câu trả lời để thử"><button class="btn" id="typedGo">Gửi</button></div>` : ""}
+      ${chat.showTyped ? `<div class="typed"><input id="typed" maxlength="200" autocomplete="off" autocapitalize="off" placeholder="Không có micro? Gõ câu trả lời để thử"><button class="btn" id="typedGo">Gửi</button></div>` : ""}
       <div class="row" style="justify-content:center;margin-top:12px">
         ${r && r.result.score >= 50 ? `<button class="btn primary" id="continue">Tiếp tục →</button>` : ""}
         ${r && r.result.score < 50 ? `<button class="btn" id="skip">Bỏ qua lượt này</button>` : ""}
       </div>
+      ${chat.turn > 0 ? `<p><button class="btn ghost small" id="restart">↺ Diễn lại từ đầu</button></p>` : ""}
+      ${micNotice()}
     </section>`}`;
   $$("[data-say]").forEach((b) => (b.onclick = () => say(b.dataset.say)));
   $("#vi").onchange = (e) => { chat.showVi = e.target.checked; renderChat(id); };
@@ -490,10 +662,24 @@ function renderChat(id) {
   $("#mic").onclick = () => (chat.listening ? activeListen?.stop() : chatListen(rp));
   const typedGo = $("#typedGo");
   if (typedGo) {
-    const submit = () => { const val = $("#typed").value.trim(); if (val) chatResult(rp, [{ transcript: val, confidence: 1 }]); };
+    const submit = () => {
+      const val = $("#typed").value.trim();
+      if (val) return chatResult(rp, [{ transcript: val, confidence: 1 }]);
+      chat.error = EMPTY_ANSWER;
+      renderChat(id);
+      $("#typed").focus();
+    };
     typedGo.onclick = submit;
-    $("#typed").onkeydown = (e) => { if (e.key === "Enter") submit(); };
+    $("#typed").onkeydown = (e) => {
+      if (e.key !== "Enter") return;
+      if (chat.result && !e.target.value.trim()) advanceChat(rp, chat.result.result.score >= 50); else submit();
+    };
+    if (hadFocus || (finePointer && !r)) $("#typed").focus({ preventScroll: true });
   }
+  const useTyped = $("#useTyped");
+  if (useTyped) useTyped.onclick = () => { chat.showTyped = true; renderChat(id); $("#typed").focus(); };
+  const restart = $("#restart");
+  if (restart) restart.onclick = () => { chat = null; resume.clear("chat"); renderChat(id); };
   const cont = $("#continue");
   if (cont) cont.onclick = () => advanceChat(rp, true);
   const skip = $("#skip");
@@ -527,6 +713,7 @@ async function chatListen(rp) {
 
 function chatResult(rp, alternatives) {
   const turn = rp.turns[chat.turn];
+  chat.error = null;
   chat.result = bestOfAnswers(turn.replies.map((x) => x[0]), alternatives);
   renderChat(rp.id);
 }
@@ -537,6 +724,7 @@ function advanceChat(rp, accepted) {
   const [en, vi] = turn.replies[r ? r.index : 0];
   chat.log.push({ who: "me", en, vi, score: r ? r.result.score : 0 });
   chat.scores.push(accepted && r ? r.result.score : 0);
+  chat.picks.push({ reply: r ? r.index : 0, score: r ? r.result.score : 0, counted: Boolean(accepted && r) });
   chat.turn += 1;
   chat.result = null;
   chat.error = null;
@@ -610,32 +798,66 @@ function renderMe() {
   $("#rec").onchange = (e) => progress.updateSettings({ keepRecording: e.target.checked });
   $("#test").onclick = () => say("Hi! Let's practise speaking English together.");
   $("#reset").onclick = () => {
-    if (confirm("Xoá toàn bộ XP, huy hiệu và tiến độ?")) { progress.reset(); renderTopStats(); renderMe(); toast("Đã xoá tiến độ"); }
+    if (confirm("Xoá toàn bộ XP, huy hiệu và tiến độ?")) { progress.reset(); resume.clearAll(); session = chat = quiz = null; renderTopStats(); renderMe(); toast("Đã xoá tiến độ"); }
   };
 }
 
 // ---------- router ----------
 function go(hash) { location.hash = hash; }
 
-function route() {
-  activeListen?.stop();
-  stopSpeaking();
-  const [, name, id] = (location.hash || "#/home").split("/");
-  renderTopStats();
+const currentRoute = () => (location.hash || "#/home").split("/").slice(1);
+
+function render(name, id) {
   switch (name) {
     case "topics": renderTopics(); break;
     case "topic": renderTopic(id); break;
     case "practice": renderPractice(); break;
+    case "review": renderReview(); break;
     case "sounds": renderSounds(); break;
     case "sound": renderSound(id); break;
-    case "listen": quiz = null; renderListen(id); break;
-    case "roleplay": id ? (chat = null, renderChat(id)) : renderRoleplays(); break;
+    case "listen": renderListen(id); break;
+    case "roleplay": id ? renderChat(id) : renderRoleplays(); break;
     case "me": renderMe(); break;
     default: renderHome();
   }
-  if (name !== "practice" && name !== "roleplay") window.scrollTo(0, 0);
-  view.focus({ preventScroll: true });
 }
+
+let lastRoute = null;
+function route() {
+  activeListen?.stop();
+  stopSpeaking();
+  const [name, id] = currentRoute();
+  if (lastRoute === "practice" && name !== "practice" && session) {
+    if (!session.done && sessionStarted(session)) toast("Đã lưu chỗ đang học. Vào Trang chủ để học tiếp.");
+    session = null;
+  }
+  lastRoute = name;
+  if (quiz && quiz.round >= quiz.total) quiz = null;
+  if (chat && chat.final !== undefined) chat = null;
+  renderTopStats();
+  render(name, id);
+  if (name !== "practice" && name !== "roleplay") window.scrollTo(0, 0);
+  if (!view.contains(document.activeElement)) view.focus({ preventScroll: true });
+}
+
+// Redraw screens that only show progress, e.g. after another tab saved; never interrupts an exercise or typing.
+function refreshPassiveView() {
+  const [name, id] = currentRoute();
+  const active = name === "practice" || name === "listen" || (name === "roleplay" && id);
+  if (active || /^(INPUT|SELECT)$/.test(document.activeElement?.tagName)) return;
+  const y = window.scrollY;
+  render(name, id);
+  window.scrollTo(0, y);
+}
+
+window.addEventListener("offline", () => {
+  toast("📴 Mất mạng. Bạn vẫn có thể luyện bằng cách gõ.");
+  const [name, id] = currentRoute();
+  if (name === "practice" && session && !session.showTyped && !session.listening) { session.showTyped = true; renderPractice(); }
+  else if (name === "roleplay" && id && chat && !chat.showTyped && !chat.listening) { chat.showTyped = true; renderChat(id); }
+  else refreshPassiveView();
+});
+window.addEventListener("online", () => { toast("Đã có mạng trở lại."); refreshPassiveView(); });
 
 window.addEventListener("hashchange", route);
 route();
