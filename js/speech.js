@@ -1,18 +1,42 @@
-// Browser speech helpers: text-to-speech, speech recognition and audio recording.
+// Speech helpers: text-to-speech, speech recognition and audio recording.
+// In a browser they use the Web Speech API. Inside the Android app the WebView has no Web Speech API,
+// so the app injects window.SirinonoNative and speech goes through Android instead.
 const Recognition = typeof window !== "undefined" ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
+const native = typeof window !== "undefined" ? window.SirinonoNative || null : null;
 
 export const support = {
-  recognition: !!Recognition,
-  synthesis: typeof window !== "undefined" && "speechSynthesis" in window,
-  recording: typeof window !== "undefined" && !!(navigator.mediaDevices?.getUserMedia) && typeof MediaRecorder !== "undefined"
+  native: !!native,
+  recognition: native ? !!native.canRecognize() : !!Recognition,
+  synthesis: !!native || (typeof window !== "undefined" && "speechSynthesis" in window),
+  // The Android recognizer owns the microphone while it listens, so there is no second stream to record.
+  recording: !native && typeof window !== "undefined" && !!(navigator.mediaDevices?.getUserMedia) && typeof MediaRecorder !== "undefined"
 };
 
+// Each native call gets an id; Android answers once with window.__sirinonoNative(id, result).
+const nativeCalls = new Map();
+let nativeCallId = 0;
+if (native) {
+  window.__sirinonoNative = (id, result) => {
+    const done = nativeCalls.get(id);
+    nativeCalls.delete(id);
+    done?.(result || {});
+  };
+}
+function callNative(start) {
+  return new Promise((resolve) => {
+    const id = ++nativeCallId;
+    nativeCalls.set(id, resolve);
+    start(id);
+  });
+}
+
 let voices = [];
+const webSynthesis = !native && support.synthesis;
 function loadVoices() {
-  if (!support.synthesis) return;
+  if (!webSynthesis) return;
   voices = window.speechSynthesis.getVoices();
 }
-if (support.synthesis) {
+if (webSynthesis) {
   loadVoices();
   window.speechSynthesis.addEventListener?.("voiceschanged", loadVoices);
 }
@@ -29,6 +53,7 @@ function pickVoice(lang) {
 }
 
 export function speak(text, { lang = "en-US", rate = 0.9 } = {}) {
+  if (native) return callNative((id) => native.speak(id, String(text), lang, rate)).then((r) => !!r.ok);
   return new Promise((resolve) => {
     if (!support.synthesis) return resolve(false);
     window.speechSynthesis.cancel();
@@ -44,6 +69,7 @@ export function speak(text, { lang = "en-US", rate = 0.9 } = {}) {
 }
 
 export function stopSpeaking() {
+  if (native) return native.stopSpeaking();
   if (support.synthesis) window.speechSynthesis.cancel();
 }
 
@@ -71,7 +97,7 @@ async function startRecorder() {
   }
 }
 
-export const ERROR_TEXT = {
+const WEB_ERROR_TEXT = {
   "not-allowed": "Bạn chưa cho phép dùng micro. Hãy bấm vào biểu tượng ổ khoá trên thanh địa chỉ để bật micro.",
   "service-not-allowed": "Trình duyệt không cho phép nhận diện giọng nói. Hãy thử Chrome hoặc Edge.",
   "no-speech": "Mình chưa nghe thấy gì. Hãy nói to và rõ hơn nhé.",
@@ -81,8 +107,33 @@ export const ERROR_TEXT = {
   unsupported: "Trình duyệt này chưa hỗ trợ nhận diện giọng nói. Hãy dùng Chrome (Android/máy tính) hoặc Safari (iPhone)."
 };
 
+const NATIVE_ERROR_TEXT = {
+  ...WEB_ERROR_TEXT,
+  "not-allowed": "Bạn chưa cho phép dùng micro. Hãy vào Cài đặt → Ứng dụng → Sirinono → Quyền và bật Micrô.",
+  "service-not-allowed": "Dịch vụ nhận diện giọng nói trên máy đang gặp lỗi. Hãy thử lại sau ít phút.",
+  unsupported: "Máy này chưa có dịch vụ nhận diện giọng nói. Hãy cài hoặc bật ứng dụng Google."
+};
+
+export const ERROR_TEXT = native ? NATIVE_ERROR_TEXT : WEB_ERROR_TEXT;
+
+function listenNative(lang, maxMs, onStart) {
+  let timer = null;
+  const promise = callNative((id) => {
+    native.listen(id, lang);
+    onStart?.();
+    timer = setTimeout(() => native.stopListening(), maxMs);
+  }).then((r) => {
+    clearTimeout(timer);
+    if (r.alternatives?.length) return { alternatives: r.alternatives, audioUrl: null };
+    throw { code: r.error || "no-speech" };
+  });
+  promise.stop = () => native.stopListening();
+  return promise;
+}
+
 // Listen once. Resolves { alternatives: [{transcript, confidence}], audioUrl } or rejects with { code }.
 export function listen({ lang = "en-US", record = true, maxMs = 9000, onStart } = {}) {
+  if (native) return listenNative(lang, maxMs, onStart);
   if (!Recognition) return Promise.reject({ code: "unsupported" });
   let active = null;
   let stopped = false;

@@ -38,6 +38,27 @@ npm test      # unit tests (node:test, no dependencies)
 
 The microphone works on `localhost` or over HTTPS.
 
+## Android app (APK)
+
+The `android/` folder wraps the same web app in a small native Android app (Java, no third-party libraries). The web files are copied into the APK at build time, so there is one source for both.
+
+```bash
+cd android
+./gradlew assembleDebug     # app/build/outputs/apk/debug/app-debug.apk
+```
+
+Building needs JDK 17 and the Android SDK (platform 34); point `ANDROID_HOME` at the SDK or set `sdk.dir` in `android/local.properties`. The `.github/workflows/android.yml` workflow builds the same APK and stores it as the `sirinono-apk` artifact of each run.
+
+How the APK differs from the website:
+
+- Android's WebView has no Web Speech API, so `js/speech.js` talks to `SpeechBridge.java`, which uses Android's own speech recognizer and text-to-speech. Recognition needs the Google app (or another recognition service) on the device.
+- The microphone permission is requested the first time 🎤 is pressed.
+- Playing back your own recording is not available, because the recognizer holds the microphone while it listens.
+- The app has no Internet permission. All files are inside the APK; only Android's speech recognizer goes online.
+- Requires Android 7.0 or newer.
+
+The debug APK is signed with the build machine's debug key. An APK built on another machine has a different signature, and Android refuses to install it over the old one until the old app is removed (which deletes the saved progress). For updates that install over each other, create one keystore, keep it out of git, and describe it in `android/keystore.properties` (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`); `./gradlew assembleRelease` then signs with it.
+
 ## Deploy
 
 The `.github/workflows/pages.yml` workflow runs the tests and deploys to GitHub Pages when code is pushed to `main`. To enable it, go to **Settings → Pages → Source: GitHub Actions**.
@@ -54,5 +75,6 @@ js/progress.js      XP, levels, streaks, badges, daily challenge
 js/resume.js        remembers an unfinished lesson, quiz or role-play
 js/data.js          lesson content
 manifest.json, sw.js, icons/   PWA
+android/            Android app: WebView shell and native speech bridge
 tests/              unit tests
 ```
