@@ -55,7 +55,7 @@ How the APK differs from the website:
 - The microphone permission is requested the first time 🎤 is pressed.
 - Playing back your own recording is not available, because the recognizer holds the microphone while it listens.
 - The app has no Internet permission. All files are inside the APK; only Android's speech recognizer goes online.
-- Requires Android 7.0 or newer.
+- Requires Android 7.0 or newer with Android System WebView 80 or newer; an older WebView gets a screen asking to update it.
 
 The debug APK is signed with the build machine's debug key. An APK built on another machine has a different signature, and Android refuses to install it over the old one until the old app is removed (which deletes the saved progress). For updates that install over each other, create one keystore, keep it out of git, and describe it in `android/keystore.properties` (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`); `./gradlew assembleRelease` then signs with it.
 

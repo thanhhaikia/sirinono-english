@@ -14,12 +14,21 @@ import android.webkit.WebViewClient;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Hosts the Sirinono web app, bundled in assets/www, inside a WebView. */
 public class MainActivity extends Activity {
     // Reserved by Google for apps serving local content; a secure origin that never resolves on the network.
     static final String APP_HOST = "appassets.androidplatform.net";
     private static final String START_URL = "https://" + APP_HOST + "/index.html";
+
+    // The web app uses JavaScript syntax (optional chaining) that older WebViews cannot parse.
+    private static final int MIN_WEBVIEW = 80;
+    private static final String OUTDATED_PAGE = "<meta name=viewport content='width=device-width,initial-scale=1'>"
+            + "<body style='font-family:sans-serif;padding:24px;line-height:1.5'><h2>Sirinono</h2>"
+            + "<p>Thành phần hiển thị web của máy (Android System WebView) đã quá cũ nên chưa chạy được ứng dụng.</p>"
+            + "<p>Hãy mở CH Play, cập nhật <b>Android System WebView</b> và <b>Chrome</b>, rồi mở lại Sirinono.</p>";
 
     private WebView web;
     private SpeechBridge speech;
@@ -42,6 +51,10 @@ public class MainActivity extends Activity {
         // Without a WebChromeClient the WebView answers confirm() with "cancel" and never shows it.
         web.setWebChromeClient(new WebChromeClient());
 
+        if (webViewMajorVersion(settings.getUserAgentString()) < MIN_WEBVIEW) {
+            web.loadDataWithBaseURL(null, OUTDATED_PAGE, "text/html", "utf-8", null);
+            return;
+        }
         if (savedInstanceState == null || web.restoreState(savedInstanceState) == null) web.loadUrl(START_URL);
     }
 
@@ -100,6 +113,12 @@ public class MainActivity extends Activity {
             }
             return true;
         }
+    }
+
+    /** Chromium version from a WebView user agent ("... Chrome/113.0.5672.136 ..."); 0 if it has none. */
+    static int webViewMajorVersion(String userAgent) {
+        Matcher m = Pattern.compile("Chrome/(\\d+)").matcher(userAgent == null ? "" : userAgent);
+        return m.find() ? Integer.parseInt(m.group(1)) : 0;
     }
 
     private static String mimeType(String path) {
