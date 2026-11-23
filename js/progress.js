@@ -192,7 +192,7 @@ export function createProgress(storage, now = () => new Date()) {
     itemBest(id) { return state.items[id]?.best; },
 
     // Items whose latest attempt was below 80, most recent first.
-    reviewItems(limit = 20) {
+    reviewItems(limit = Infinity) {
       return Object.entries(state.items)
         .filter(([, v]) => (v.last ?? v.best ?? 0) < 80)
         .sort((a, b) => (b[1].at || 0) - (a[1].at || 0))

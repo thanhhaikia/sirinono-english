@@ -100,4 +100,7 @@ test("reviewItems lists items whose latest attempt was weak, newest first", () =
   assert.equal(p.reviewItems()[0].heard.length, 80);
   p.recordAttempt("a", 90, "hat");
   assert.deepEqual(p.reviewItems().map((r) => r.id), ["c"]);
+  for (let i = 0; i < 25; i++) p.recordAttempt(`w${i}`, 10);
+  assert.equal(p.reviewItems().length, 26);
+  assert.equal(p.reviewItems(5).length, 5);
 });

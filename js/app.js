@@ -85,7 +85,7 @@ function renderHome() {
   const today = progress.todayCount();
   const dailyDone = progress.dailyDoneToday();
   const suggestion = TOPICS.find((t) => mastery(t.items).pct < 100) || TOPICS[0];
-  const reviewCount = progress.reviewItems(99).length;
+  const reviewCount = progress.reviewItems().length;
   view.innerHTML = `
     <section class="card hero">
       <p class="muted">${s.name ? `Chào ${esc(s.name)}!` : "Chào bạn!"} Hôm nay luyện nói một chút nhé.</p>
@@ -146,6 +146,7 @@ function renderHome() {
 }
 
 // ---------- review mistakes ----------
+const REVIEW_BATCH = 10;
 function renderReview() {
   setTab("home");
   const list = progress.reviewItems().map((r) => ({ ...r, item: findItem(r.id) })).filter((r) => r.item);
@@ -155,7 +156,7 @@ function renderReview() {
     <h1>🔁 Ôn lỗi</h1>
     <p class="muted">Những từ và câu lần gần nhất bạn nói chưa đạt 80 điểm. Luyện lại đạt 80 là mục đó rời khỏi danh sách.</p>
     ${list.length ? `
-    <button class="btn primary block" id="reviewAll" style="margin-top:12px">Luyện lại ${list.length} mục</button>
+    <button class="btn primary block" id="reviewAll" style="margin-top:12px">${list.length > REVIEW_BATCH ? `Luyện ${REVIEW_BATCH} mục mới nhất` : `Luyện lại ${list.length} mục`}</button>
     <section class="card"><ul class="item-list">${list.map((r, idx) => {
       const tip = r.heard ? feedbackTips(scoreTranscript(r.item.text, r.heard).words, 1)[0] : null;
       return `<li>
@@ -170,7 +171,7 @@ function renderReview() {
   $$("[data-say]").forEach((b) => (b.onclick = () => say(b.dataset.say)));
   $$("[data-start]").forEach((b) => (b.onclick = () => startSession({ title: "Ôn lỗi", items, back: "#/review", start: Number(b.dataset.start) })));
   const all = $("#reviewAll");
-  if (all) all.onclick = () => startSession({ title: "Ôn lỗi", items, back: "#/review" });
+  if (all) all.onclick = () => startSession({ title: "Ôn lỗi", items: items.slice(0, REVIEW_BATCH), back: "#/review" });
 }
 
 // ---------- topics ----------
